@@ -6,21 +6,19 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 )
 
 /*
 For a compressed file structure:
-	Header (metadata)
+	Metadata
 	vocabulary
 	Symbol table (the BPE vocabulary/codebook)
 	Compressed data
 */
 
-type Header struct {
-	filename          string
-	original_size     int64
-	compressed_size   int64
-	compression_ratio int8
+type Metadata struct {
+	filename string
 }
 
 type BPE struct {
@@ -47,6 +45,7 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 		fmt.Println(err)
 		return
 	}
+
 	r := bufio.NewReader(file_input)
 
 	var inputFileText string = ""
@@ -56,18 +55,69 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 		if err != nil {
 			break
 		}
-		inputFileText = inputFileText + line
+		//inputFileText = inputFileText + line
+		inputFileText = inputFileText + strings.TrimSuffix(line, "\n")
 	}
 
 	compressedInput := *b.compress(&inputFileText)
 
+	metadata := Metadata{
+		filename: inputFile,
+	}
+
+	fmt.Printf("INPUT: %v\n\n", inputFileText)
+
+	fmt.Printf("METADATA: %v\n\n", metadata)
 	fmt.Printf("SYMBOL TABLE: %v\n\n", b.symbolTable)
 	fmt.Printf("VOCABULARY: %v\n\n", b.vocabulary)
 	fmt.Printf("COMPRESSED INPUT: %s\n\n", compressedInput)
 
-	completeString := b.createStructuredDocumentString(&compressedInput)
-	fmt.Printf("COMPLETE OUTPUT: %s\n\n", *completeString)
+	// completeString := b.createStructuredDocumentString(&compressedInput)
+	// fmt.Printf("COMPLETE OUTPUT: %s\n\n", *completeString)
 
+	decompressedString := b.decompress(&compressedInput)
+	fmt.Printf("DECOMPRESSED OUTPUT: %s\n\n", *decompressedString)
+
+}
+func (b *BPE) tempResubstituteWithNewSymbol(compressed_input *string) *string {
+
+	var result strings.Builder //
+
+	for i := 0; i < len(*compressed_input); i++ {
+		char := (*compressed_input)[i]
+		if pair, exists := b.symbolTable[char]; exists {
+			result.WriteString(pair) // Append the pair from symbolTable
+		} else {
+			result.WriteByte(char) // Append the character as-is
+		}
+	}
+
+	finalString := result.String()
+	return &finalString
+}
+func (b *BPE) decompress(compressed_input *string) *string {
+	current := *compressed_input
+	for {
+		var result strings.Builder
+		changed := false
+
+		for i := 0; i < len(current); i++ {
+			char := current[i]
+			if pair, exists := b.symbolTable[char]; exists {
+				result.WriteString(pair) // Substitute with pair
+				changed = true
+			} else {
+				result.WriteByte(char) // Keep as-is
+			}
+		}
+
+		next := result.String()
+		if !changed || next == current { // No more changes or no progress
+			break
+		}
+		current = next
+	}
+	return &current
 }
 func (b *BPE) createStructuredDocumentString(compressedString *string) *string {
 	var completeString string
@@ -124,7 +174,7 @@ func (b *BPE) getNewSymbol() byte {
 
 	panic("No more symbols, failed at BPE.getNewSymbol")
 }
-func (b *BPE) substituteWithNewSymbol(input *string, newSymbol byte, oldPair string) string {
+func (b *BPE) substituteWithNewSymbol(input *string, newSymbol byte, oldPair string) *string {
 
 	// Create a new byte slice to hold the result
 	result := make([]byte, 0, len(*input))
@@ -144,7 +194,8 @@ func (b *BPE) substituteWithNewSymbol(input *string, newSymbol byte, oldPair str
 		result = append(result, (*input)[i])
 	}
 
-	return string(result)
+	finalstring := string(result)
+	return &finalstring
 }
 func (b *BPE) compress(input *string) *string {
 
@@ -160,7 +211,7 @@ func (b *BPE) compress(input *string) *string {
 		newSymbol := b.getNewSymbol()
 		b.symbolTable[newSymbol] = pair
 		b.vocabulary = append(b.vocabulary, newSymbol)
-		currentInput = b.substituteWithNewSymbol(&currentInput, newSymbol, pair)
+		currentInput = *b.substituteWithNewSymbol(&currentInput, newSymbol, pair)
 	}
 
 	return &currentInput
