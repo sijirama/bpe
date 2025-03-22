@@ -1,4 +1,4 @@
-package main
+package encode
 
 import (
 	"bufio"
@@ -95,7 +95,6 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 	fmt.Printf("DECOMPRESSED OUTPUT: %s\n\n", *decompressedStringRead)
 
 }
-
 func (b *BPE) decompress(compressed_input *string) *string {
 	current := *compressed_input
 	for {
@@ -217,7 +216,6 @@ func (b *BPE) compress(input *string) *string {
 
 	return &currentInput
 }
-
 func (b *BPE) writeToBinaryFile(outputFile string, metadata Metadata, compressedInput string) error {
 	outFile, err := os.Create(outputFile)
 	if err != nil {
@@ -266,7 +264,6 @@ func (b *BPE) writeToBinaryFile(outputFile string, metadata Metadata, compressed
 
 	return nil
 }
-
 func (b *BPE) readFromBinaryFile(inputFile string) (Metadata, string, error) {
 	file, err := os.Open(inputFile)
 	if err != nil {

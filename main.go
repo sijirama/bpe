@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/sijirama/bpe/encode"
 )
 
 func main() {
@@ -30,7 +32,7 @@ func main() {
 		inputFile := compressCmd.Arg(0)
 		outputFile := compressCmd.Arg(1)
 		fmt.Printf("Compressing %s to %s\n\n", inputFile, outputFile)
-		bpe := NewBPE()
+		bpe := encode.NewBPE()
 		bpe.Compress(inputFile, outputFile, 2)
 
 	case "decompress":
@@ -42,7 +44,7 @@ func main() {
 		inputFile := decompressCmd.Arg(0)
 		outputFile := decompressCmd.Arg(1)
 		fmt.Printf("Decompressing %s to %s\n", inputFile, outputFile)
-		bpe := NewBPE()
+		bpe := encode.NewBPE()
 		bpe.Decompress(inputFile, outputFile)
 
 	case "symbol":
@@ -54,7 +56,7 @@ func main() {
 		inputFile := decompressCmd.Arg(0)
 		outputFile := decompressCmd.Arg(1)
 		fmt.Printf("Symbol Table from %s is saved to %s\n", inputFile, outputFile)
-		bpe := NewBPE()
+		bpe := encode.NewBPE()
 		bpe.Symbol(inputFile, outputFile)
 
 	default:
