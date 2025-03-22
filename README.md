@@ -1,7 +1,7 @@
 
-# BPE Encoder/Compressor
+## BPE Encoder/Compressor
 
-A simple Byte Pair Encoding (BPE) implementation in Go.
+A simple Byte Pair Encoding (BPE) implementation
 
 ## Usage
 
@@ -26,4 +26,3 @@ Decompress a file:
 ## references
 
 - https://en.wikipedia.org/wiki/Byte_pair_encoding
-- https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=1e9441bbad598e181896349757b82af42b6a6902
