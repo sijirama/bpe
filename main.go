@@ -29,9 +29,9 @@ func main() {
 		}
 		inputFile := compressCmd.Arg(0)
 		outputFile := compressCmd.Arg(1)
-		fmt.Printf("Compressing %s to %s\n", inputFile, outputFile)
+		fmt.Printf("Compressing %s to %s\n\n", inputFile, outputFile)
 		bpe := NewBPE()
-		bpe.Compress(inputFile, outputFile)
+		bpe.Compress(inputFile, outputFile, 2)
 
 	case "decompress":
 		decompressCmd.Parse(os.Args[2:])
