@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"slices"
@@ -45,6 +46,7 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 		fmt.Println(err)
 		return
 	}
+	defer file_input.Close()
 
 	r := bufio.NewReader(file_input)
 
@@ -65,36 +67,35 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 		filename: inputFile,
 	}
 
+	err = b.writeToBinaryFile(outputFile, metadata, compressedInput)
+	if err != nil {
+		fmt.Println("Error writing to binary file:", err)
+		return
+	}
+
+	readMetadata, readCompressed, err := b.readFromBinaryFile(outputFile)
+	if err != nil {
+		fmt.Println("Error reading binary file:", err)
+		return
+	}
+
 	fmt.Printf("INPUT: %v\n\n", inputFileText)
 
 	fmt.Printf("METADATA: %v\n\n", metadata)
+	fmt.Printf("METADATA (read): %v\n\n", readMetadata)
 	fmt.Printf("SYMBOL TABLE: %v\n\n", b.symbolTable)
 	fmt.Printf("VOCABULARY: %v\n\n", b.vocabulary)
 	fmt.Printf("COMPRESSED INPUT: %s\n\n", compressedInput)
-
-	// completeString := b.createStructuredDocumentString(&compressedInput)
-	// fmt.Printf("COMPLETE OUTPUT: %s\n\n", *completeString)
+	fmt.Printf("COMPRESSED INPUT (read): %s\n\n", readCompressed)
 
 	decompressedString := b.decompress(&compressedInput)
 	fmt.Printf("DECOMPRESSED OUTPUT: %s\n\n", *decompressedString)
 
+	decompressedStringRead := b.decompress(&readCompressed)
+	fmt.Printf("DECOMPRESSED OUTPUT: %s\n\n", *decompressedStringRead)
+
 }
-func (b *BPE) tempResubstituteWithNewSymbol(compressed_input *string) *string {
 
-	var result strings.Builder //
-
-	for i := 0; i < len(*compressed_input); i++ {
-		char := (*compressed_input)[i]
-		if pair, exists := b.symbolTable[char]; exists {
-			result.WriteString(pair) // Append the pair from symbolTable
-		} else {
-			result.WriteByte(char) // Append the character as-is
-		}
-	}
-
-	finalString := result.String()
-	return &finalString
-}
 func (b *BPE) decompress(compressed_input *string) *string {
 	current := *compressed_input
 	for {
@@ -215,4 +216,113 @@ func (b *BPE) compress(input *string) *string {
 	}
 
 	return &currentInput
+}
+
+func (b *BPE) writeToBinaryFile(outputFile string, metadata Metadata, compressedInput string) error {
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	writer := bufio.NewWriter(outFile)
+	defer writer.Flush()
+
+	// 1. Precompute Metadata Size (TLV format)
+	metadataSize := 0
+	filenameBytes := []byte(metadata.filename)
+	filenameTLVSize := 1 + 4 + len(filenameBytes) // type (1 byte) + length (4 bytes) + value
+	metadataSize += filenameTLVSize
+
+	// 2. Precompute Symbol Table Size
+	symbolTableSize := 0
+	for _, pair := range b.symbolTable {
+		symbolTableSize += 1 + 2 + len(pair) // symbol (1 byte) + pair length (2 bytes) + pair
+	}
+
+	// 3. Precompute Compressed Data Size
+	compressedDataSize := len(compressedInput)
+
+	// 4. Write Sizes (4 bytes each, big-endian)
+	binary.Write(writer, binary.BigEndian, int32(metadataSize))
+	binary.Write(writer, binary.BigEndian, int32(symbolTableSize))
+	binary.Write(writer, binary.BigEndian, int32(compressedDataSize))
+
+	// 5. Write Metadata Section (TLV)
+	binary.Write(writer, binary.BigEndian, byte(1))                   // Type 1 = filename
+	binary.Write(writer, binary.BigEndian, int32(len(filenameBytes))) // Length
+	writer.Write(filenameBytes)                                       // Value
+
+	// 6. Write Symbol Table Section
+	for symbol, pair := range b.symbolTable {
+		pairBytes := []byte(pair)
+		binary.Write(writer, binary.BigEndian, symbol)                // Symbol (1 byte)
+		binary.Write(writer, binary.BigEndian, int16(len(pairBytes))) // Pair length (2 bytes)
+		writer.Write(pairBytes)                                       // Pair
+	}
+
+	// 7. Write Compressed Data Section
+	writer.WriteString(compressedInput)
+
+	return nil
+}
+
+func (b *BPE) readFromBinaryFile(inputFile string) (Metadata, string, error) {
+	file, err := os.Open(inputFile)
+	if err != nil {
+		return Metadata{}, "", err
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+
+	// Read sizes
+	var metadataSize, symbolTableSize, compressedDataSize int32
+	binary.Read(reader, binary.BigEndian, &metadataSize)
+	binary.Read(reader, binary.BigEndian, &symbolTableSize)
+	binary.Read(reader, binary.BigEndian, &compressedDataSize)
+
+	// Read metadata (TLV)
+	var metadata Metadata
+	for metadataSize > 0 {
+		var fieldType byte
+		var fieldLength int32
+		binary.Read(reader, binary.BigEndian, &fieldType)
+		binary.Read(reader, binary.BigEndian, &fieldLength)
+
+		fieldBytes := make([]byte, fieldLength)
+		reader.Read(fieldBytes)
+
+		switch fieldType {
+		case 1: // filename
+			metadata.filename = string(fieldBytes)
+		default:
+			// Skip unknown fields (for flexibility)
+		}
+
+		metadataSize -= 1 + 4 + fieldLength // Subtract TLV size
+	}
+
+	// Read symbol table
+	b.symbolTable = make(map[byte]string) // Reset symbol table
+	symbolTableBytesRead := int32(0)
+	for symbolTableBytesRead < symbolTableSize {
+		var symbol byte
+		var pairLength int16
+		binary.Read(reader, binary.BigEndian, &symbol)
+		binary.Read(reader, binary.BigEndian, &pairLength)
+
+		pairBytes := make([]byte, pairLength)
+		reader.Read(pairBytes)
+
+		b.symbolTable[symbol] = string(pairBytes)
+		symbolTableBytesRead += 1 + 2 + int32(pairLength) // symbol + length + pair
+	}
+
+	// Read compressed data
+	compressedBytes := make([]byte, compressedDataSize)
+	reader.Read(compressedBytes)
+	compressedInput := string(compressedBytes)
+
+	return metadata, compressedInput, nil
 }
