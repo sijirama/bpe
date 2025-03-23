@@ -34,9 +34,55 @@ func NewBPE() *BPE {
 	}
 }
 
-func (b *BPE) Decompress(inputFile, outputFile string) { return }
-func (b *BPE) Symbol(inputFile, outputFile string)     { return }
-func (b *BPE) Header(inputFile, outputFile string)     { return }
+func (b *BPE) Symbol(inputFile, outputFile string) { return }
+func (b *BPE) Header(inputFile, outputFile string) { return }
+func (b *BPE) Decompress(inputFile, outputFile string) {
+
+	file_input, err := os.Open(inputFile)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer file_input.Close()
+
+	r := bufio.NewReader(file_input)
+
+	var inputFileText string = ""
+
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			break
+		}
+		//inputFileText = inputFileText + line
+		inputFileText = inputFileText + strings.TrimSuffix(line, "\n")
+	}
+
+	_, readCompressed, err := b.readFromBinaryFile(inputFile)
+	if err != nil {
+		fmt.Println("Error reading binary file:", err)
+		return
+	}
+	decompressedString := b.decompress(&readCompressed)
+
+	// Write to output text file
+	file_output, err := os.Create(outputFile)
+	if err != nil {
+		fmt.Println("Error creating output file:", err)
+		return
+	}
+	defer file_output.Close()
+
+	_, err = file_output.WriteString(*decompressedString)
+	if err != nil {
+		fmt.Println("Error writing to output file:", err)
+		return
+	}
+
+	fmt.Printf("Successfully decompressed %s to %s\n", inputFile, outputFile)
+
+	return
+}
 func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 
 	b.minimumPairFreq = min_pair_freq
