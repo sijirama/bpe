@@ -103,7 +103,6 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 		if err != nil {
 			break
 		}
-		//inputFileText = inputFileText + line
 		inputFileText = inputFileText + strings.TrimSuffix(line, "\n")
 	}
 
@@ -119,27 +118,7 @@ func (b *BPE) Compress(inputFile, outputFile string, min_pair_freq int) {
 		return
 	}
 
-	readMetadata, readCompressed, err := b.readFromBinaryFile(outputFile)
-	if err != nil {
-		fmt.Println("Error reading binary file:", err)
-		return
-	}
-
-	fmt.Printf("INPUT: %v\n\n", inputFileText)
-
-	fmt.Printf("METADATA: %v\n\n", metadata)
-	fmt.Printf("METADATA (read): %v\n\n", readMetadata)
-	fmt.Printf("SYMBOL TABLE: %v\n\n", b.symbolTable)
-	fmt.Printf("VOCABULARY: %v\n\n", b.vocabulary)
-	fmt.Printf("COMPRESSED INPUT: %s\n\n", compressedInput)
-	fmt.Printf("COMPRESSED INPUT (read): %s\n\n", readCompressed)
-
-	decompressedString := b.decompress(&compressedInput)
-	fmt.Printf("DECOMPRESSED OUTPUT: %s\n\n", *decompressedString)
-
-	decompressedStringRead := b.decompress(&readCompressed)
-	fmt.Printf("DECOMPRESSED OUTPUT: %s\n\n", *decompressedStringRead)
-
+	fmt.Printf("Successfully compressed %s to %s\n", inputFile, outputFile)
 }
 func (b *BPE) decompress(compressed_input *string) *string {
 	current := *compressed_input
@@ -164,13 +143,6 @@ func (b *BPE) decompress(compressed_input *string) *string {
 		current = next
 	}
 	return &current
-}
-func (b *BPE) createStructuredDocumentString(compressedString *string) *string {
-	var completeString string
-
-	completeString += *compressedString
-
-	return &completeString
 }
 func (b *BPE) getInitialInputVocabulary(input_text *string) {
 
